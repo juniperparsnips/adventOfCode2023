@@ -1,10 +1,10 @@
-use core::{convert::Infallible, str::FromStr};
-use std::collections::HashMap;
+use core::str::FromStr;
 
 fn main() {
     let input = include_str!("../assets/day2Input.txt");
-    let limit = GameLimits::new(12, 13, 14);
-    let sum_of_games_failed = run_part_1(input, limit);
+    // Part 1
+    // let limit = GameLimits::new(12, 13, 14);
+    let sum_of_games_failed = run_part_2(input);
     println!("{sum_of_games_failed}");
 }
 
@@ -16,6 +16,17 @@ fn run_part_1(input: &str, limit: GameLimits) -> u32 {
         if !game.is_illegal(&limit) {
             sum += game.id;
         }
+    }
+
+    sum
+}
+
+fn run_part_2(input: &str) -> u32 {
+    let games: Vec<Game> = input.lines().map(|line| line.parse().unwrap()).collect();
+
+    let mut sum = 0;
+    for game in games {
+        sum += game.power();
     }
 
     sum
@@ -102,6 +113,39 @@ impl Game {
         }
         return false;
     }
+
+    fn min_game_size(&self) -> Hand {
+        let mut max_red = 0;
+        let mut max_green = 0;
+        let mut max_blue = 0;
+
+        for hand in &self.hands {
+            if hand.num_red > max_red {
+                max_red = hand.num_red;
+            }
+            if hand.num_green > max_green {
+                max_green = hand.num_green;
+            }
+            if hand.num_blue > max_blue {
+                max_blue = hand.num_blue;
+            }
+        }
+
+        Hand {
+            num_red: max_red,
+            num_green: max_green,
+            num_blue: max_blue,
+        }
+    }
+
+    fn power(&self) -> u32 {
+        let Hand {
+            num_red,
+            num_green,
+            num_blue,
+        } = self.min_game_size();
+        num_red * num_green * num_blue
+    }
 }
 
 impl FromStr for Game {
@@ -158,6 +202,17 @@ Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green
         let limit = GameLimits::new(12, 13, 14);
 
         assert_eq!(run_part_1(input, limit), 8)
+    }
+
+    #[test]
+    fn part2_known_input() {
+        let input = r##"Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green
+Game 2: 1 blue, 2 green; 3 green, 4 blue, 1 red; 1 green, 1 blue
+Game 3: 8 green, 6 blue, 20 red; 5 blue, 4 red, 13 green; 5 green, 1 red
+Game 4: 1 green, 3 red, 6 blue; 3 green, 6 red; 3 green, 15 blue, 14 red
+Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green"##;
+
+        assert_eq!(run_part_2(input), 2286)
     }
 
     #[test]
