@@ -1,7 +1,16 @@
+use std::{
+    collections::{HashMap, HashSet},
+    time::Instant,
+};
+
 fn main() {
+    let start = Instant::now();
     let input = include_str!("../assets/day3Input.txt");
-    let res = run_part_1(input);
+    let res = run_part_2(input);
     println!("{res}");
+
+    let time = start.elapsed();
+    println!("{time:?}");
 }
 
 fn run_part_1(input: &str) -> u32 {
@@ -12,14 +21,41 @@ fn run_part_1(input: &str) -> u32 {
     let mut sum = 0;
     for p in potential_parts {
         if p.is_part(&char_array) {
-            println!("p: {p:?} p");
             sum += p.number
-        } else {
-            println!("n: {p:?} n");
         }
     }
 
     sum
+}
+
+fn run_part_2(input: &str) -> u32 {
+    let potential_parts = read_part_numbers(input);
+
+    let char_array = input.lines().map(|l| l.chars().collect()).collect();
+
+    let mut gears: HashMap<Gear, Vec<u32>> = HashMap::new();
+
+    for p in potential_parts {
+        let part_gears = p.gears(&char_array);
+        for gear in part_gears {
+            gears
+                .entry(gear)
+                .and_modify(|rs| rs.push(p.number))
+                .or_insert(vec![p.number]);
+        }
+    }
+
+    gears
+        .iter()
+        .filter_map(|(g, parts)| {
+            if parts.len() == 2 {
+                Some(parts[0] * parts[1])
+            } else {
+                None
+            }
+        })
+        .reduce(core::ops::Add::add)
+        .unwrap()
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,6 +68,16 @@ struct PartNumber {
 
 fn is_symbol(c: char) -> bool {
     c.is_ascii_punctuation() && c != '.'
+}
+
+fn is_gear(c: char) -> bool {
+    c == '*'
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct Gear {
+    row: usize,
+    column: usize,
 }
 
 impl PartNumber {
@@ -76,6 +122,63 @@ impl PartNumber {
         }
 
         return false;
+    }
+
+    fn gears(&self, input: &Vec<Vec<char>>) -> HashSet<Gear> {
+        // for simplicity I'm assuming the input is rectangular
+        // which it is for the one input this has to work for
+
+        let mut gears = HashSet::new();
+
+        let left_start: usize = if self.index == 0 { 0 } else { self.index - 1 };
+        // non-inclusive
+        let right_end = (self.index + self.length + 1).min(input[0].len());
+
+        // top row
+        if self.line_num != 0 {
+            for i in left_start..right_end {
+                if is_gear(input[self.line_num - 1][i]) {
+                    gears.insert(Gear {
+                        row: self.line_num - 1,
+                        column: i,
+                    });
+                }
+            }
+        }
+
+        // left
+        if self.index != 0 {
+            if is_gear(input[self.line_num][self.index - 1]) {
+                gears.insert(Gear {
+                    row: self.line_num,
+                    column: self.index - 1,
+                });
+            }
+        }
+
+        //right
+        if self.index + self.length < input[self.line_num].len() {
+            if is_gear(input[self.line_num][self.index + self.length]) {
+                gears.insert(Gear {
+                    row: self.line_num,
+                    column: self.index + self.length,
+                });
+            }
+        }
+
+        // bottom row
+        if self.line_num + 1 < input.len() {
+            for i in left_start..right_end {
+                if is_gear(input[self.line_num + 1][i]) {
+                    gears.insert(Gear {
+                        row: self.line_num + 1,
+                        column: i,
+                    });
+                }
+            }
+        }
+
+        return gears;
     }
 }
 
@@ -142,6 +245,22 @@ mod test {
 .664.598..
 "##;
         assert_eq!(run_part_1(input), 4361);
+    }
+
+    #[test]
+    fn part2_known_input() {
+        let input = r##"467..114..
+...*......
+..35..633.
+......#...
+617*......
+.....+.58.
+..592.....
+......755.
+...$.*....
+.664.598..
+"##;
+        assert_eq!(run_part_2(input), 467835);
     }
 
     #[test]
