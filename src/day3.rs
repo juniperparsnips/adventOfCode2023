@@ -1,16 +1,11 @@
-use std::{
-    collections::{HashMap, HashSet},
-    time::Instant,
-};
+use std::collections::{HashMap, HashSet};
 
 fn main() {
-    let start = Instant::now();
     let input = include_str!("../assets/day3Input.txt");
-    let res = run_part_2(input);
-    println!("{res}");
-
-    let time = start.elapsed();
-    println!("{time:?}");
+    let res_1 = run_part_1(input);
+    println!("part 1: {res_1}");
+    let res_2 = run_part_2(input);
+    println!("part 2: {res_2}");
 }
 
 fn run_part_1(input: &str) -> u32 {
@@ -18,14 +13,16 @@ fn run_part_1(input: &str) -> u32 {
 
     let char_array = input.lines().map(|l| l.chars().collect()).collect();
 
-    let mut sum = 0;
-    for p in potential_parts {
-        if p.is_part(&char_array) {
-            sum += p.number
-        }
-    }
-
-    sum
+    potential_parts
+        .iter()
+        .filter_map(|p| {
+            if p.is_part(&char_array) {
+                Some(p.number)
+            } else {
+                None
+            }
+        })
+        .sum()
 }
 
 fn run_part_2(input: &str) -> u32 {
@@ -47,15 +44,14 @@ fn run_part_2(input: &str) -> u32 {
 
     gears
         .iter()
-        .filter_map(|(g, parts)| {
+        .filter_map(|(_g, parts)| {
             if parts.len() == 2 {
                 Some(parts[0] * parts[1])
             } else {
                 None
             }
         })
-        .reduce(core::ops::Add::add)
-        .unwrap()
+        .sum()
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -210,7 +206,6 @@ fn read_part_numbers(input: &str) -> Vec<PartNumber> {
                 running_number += digit_next;
                 index += 1;
             } else {
-                // i = j - 1;
                 break;
             }
         }
@@ -221,7 +216,6 @@ fn read_part_numbers(input: &str) -> Vec<PartNumber> {
             length: running_number.len(),
             number: u32::from_str_radix(&running_number, 10).unwrap(),
         });
-        // i += 1;
     }
 
     numbers

@@ -2,34 +2,33 @@ use core::str::FromStr;
 
 fn main() {
     let input = include_str!("../assets/day2Input.txt");
-    // Part 1
-    // let limit = GameLimits::new(12, 13, 14);
+
+    let limit = GameLimits::new(12, 13, 14);
+    let illegal_games = run_part_1(input, limit);
+    println!("illegal_games: {illegal_games}");
     let sum_of_games_failed = run_part_2(input);
-    println!("{sum_of_games_failed}");
+    println!("games failed: {sum_of_games_failed}");
 }
 
 fn run_part_1(input: &str, limit: GameLimits) -> u32 {
     let games: Vec<Game> = input.lines().map(|line| line.parse().unwrap()).collect();
 
-    let mut sum = 0;
-    for game in games {
-        if !game.is_illegal(&limit) {
-            sum += game.id;
-        }
-    }
-
-    sum
+    games
+        .iter()
+        .filter_map(|g| {
+            if g.is_illegal(&limit) {
+                Some(g.id)
+            } else {
+                None
+            }
+        })
+        .sum()
 }
 
 fn run_part_2(input: &str) -> u32 {
     let games: Vec<Game> = input.lines().map(|line| line.parse().unwrap()).collect();
 
-    let mut sum = 0;
-    for game in games {
-        sum += game.power();
-    }
-
-    sum
+    games.iter().map(|g| g.power()).sum()
 }
 
 #[derive(Debug, Clone, Copy)]

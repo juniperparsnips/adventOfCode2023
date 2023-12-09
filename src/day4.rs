@@ -1,10 +1,10 @@
-use core::{ops::Add, str::FromStr};
+use core::str::FromStr;
 use std::collections::HashSet;
 
 fn main() {
     let input = include_str!("../assets/day4Input.txt");
-    // let part1_res = run_part_1(input);
-    // println!("part 1: {part1_res}");
+    let part1_res = run_part_1(input);
+    println!("part 1: {part1_res}");
 
     let part2_res = run_part_2(input);
     println!("part 2: {part2_res}");
@@ -13,7 +13,7 @@ fn main() {
 fn run_part_1(input: &str) -> u32 {
     let cards = Card::read_input(input).unwrap();
 
-    cards.iter().map(Card::score).reduce(Add::add).unwrap()
+    cards.iter().map(Card::score).sum()
 }
 
 fn run_part_2(input: &str) -> u32 {
@@ -28,12 +28,12 @@ fn run_part_2(input: &str) -> u32 {
         }
     }
 
-    instances_of_card.into_iter().reduce(Add::add).unwrap()
+    instances_of_card.into_iter().sum()
 }
 
 #[derive(Debug, Clone)]
 struct Card {
-    id: u32,
+    _id: u32,
     winning: HashSet<u32>,
     ours: HashSet<u32>,
 }
@@ -93,7 +93,11 @@ impl FromStr for Card {
             .map(|n| u32::from_str_radix(n, 10).unwrap())
             .collect();
 
-        Ok(Card { id, winning, ours })
+        Ok(Card {
+            _id: id,
+            winning,
+            ours,
+        })
     }
 }
 

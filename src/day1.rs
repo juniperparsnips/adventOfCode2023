@@ -71,12 +71,11 @@ fn parse_line(line: &str) -> Option<u32> {
 }
 
 fn map_calibration_sum(calibration_doc: &str) -> u32 {
-    let mut sum = 0;
-    for line in calibration_doc.lines() {
-        sum += parse_line(line).unwrap();
-    }
-
-    return sum;
+    calibration_doc
+        .lines()
+        .map(|l| parse_line(l))
+        .sum::<Option<u32>>()
+        .unwrap()
 }
 
 #[cfg(test)]
