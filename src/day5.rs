@@ -2,12 +2,17 @@ use core::{
     ops::{Add, Sub},
     str::{FromStr, Split},
 };
-use std::collections::{HashMap, HashSet};
+use std::{collections::HashSet, time::Instant};
 
 fn main() {
     let input = include_str!("../assets/day5Input.txt");
     let part_1_out = run_part_1(input);
-    println!("part_1: {part_1_out}");
+    let now = Instant::now();
+    println!("part_1: {part_1_out}, in {:?}", now.elapsed());
+
+    let now = Instant::now();
+    let part_2_out = run_part_2(input);
+    println!("part_2: {part_2_out}, in {:?}", now.elapsed());
 }
 
 fn run_part_1(input: &str) -> usize {
@@ -22,12 +27,13 @@ fn run_part_2(input: &str) -> usize {
     almanac.smallest_range_location().into()
 }
 
+#[derive(Debug, Clone, Copy)]
 struct SeedRange {
     start: Seed,
     length: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 struct Seed(usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
@@ -132,6 +138,7 @@ impl From<Location> for usize {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 struct Map<S, D, L> {
     dest_start: D,
     source_start: S,
@@ -149,7 +156,6 @@ where
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let split: Vec<_> = s.split_ascii_whitespace().collect();
-        println!("{s}");
         if split.len() != 3 {
             return Err("Expected map line to have exactly 3 values".to_string());
         }
@@ -165,6 +171,7 @@ where
     }
 }
 
+#[derive(Debug, Clone)]
 struct Maps<S, D, L>(Vec<Map<S, D, L>>, String);
 
 impl<S, D, L> Maps<S, D, L>
@@ -175,7 +182,7 @@ where
 {
     fn convert(&self, source: S) -> D {
         for map in &self.0 {
-            if source.into() > map.source_start.into()
+            if source.into() >= map.source_start.into()
                 && source.into() < map.source_start.into() + map.length
             {
                 let i: L = source.into() - map.source_start.into();
@@ -189,7 +196,7 @@ where
 
     fn invert(&self, dest: D) -> S {
         for map in &self.0 {
-            if dest.into() > map.dest_start.into()
+            if dest.into() >= map.dest_start.into()
                 && dest.into() < map.dest_start.into() + map.length
             {
                 let i: L = dest.into() - map.dest_start.into();
@@ -223,6 +230,7 @@ where
     }
 }
 
+#[derive(Debug, Clone)]
 struct Almanac {
     seeds: Vec<Seed>,
     seed_ranges: Vec<SeedRange>,
@@ -246,7 +254,7 @@ impl Almanac {
             .map(|l| self.light_to_temperature.convert(l))
             .map(|t| self.temperature_to_humidity.convert(t))
             .map(|h| self.humidity_to_location.convert(h))
-            .reduce(|smallest, l| smallest.min(l))
+            .min()
             .unwrap()
     }
 
@@ -258,20 +266,38 @@ impl Almanac {
 
     fn smallest_range_location(&self) -> Location {
         let mut map_discontinuities = HashSet::new();
-        for range in self.seed_ranges {
-            map_discontinuities.insert(range.start)
+        for range in &self.seed_ranges {
+            map_discontinuities.insert(range.start);
         }
         // populate seed_discontinuities
         self.humidity_to_location
             .0
             .iter()
-            .map(|h| self.temperature_to_humidity.invert(d))
-            .
+            .map(|m| self.temperature_to_humidity.invert(m.source_start))
+            .chain(
+                self.temperature_to_humidity
+                    .0
+                    .iter()
+                    .map(|m| m.source_start),
+            )
+            .map(|t| self.light_to_temperature.invert(t))
+            .chain(self.light_to_temperature.0.iter().map(|l| l.source_start))
+            .map(|l| self.water_to_light.invert(l))
+            .chain(self.water_to_light.0.iter().map(|m| m.source_start))
+            .map(|w| self.fertilizer_to_water.invert(w))
+            .chain(self.fertilizer_to_water.0.iter().map(|m| m.source_start))
+            .map(|f| self.soil_to_fertilizer.invert(f))
+            .chain(self.soil_to_fertilizer.0.iter().map(|m| m.source_start))
+            .map(|s| self.seed_to_soil.invert(s))
+            .chain(self.seed_to_soil.0.iter().map(|m| m.source_start))
+            .filter(|s| self.is_valid_seed(*s))
+            .for_each(|s| {
+                map_discontinuities.insert(s);
+            });
 
         // check all discontinuities
-        seed_discontinuities
+        map_discontinuities
             .into_iter()
-            .filter(|s| self.is_valid_seed(s))
             .map(|s| self.seed_to_soil.convert(s))
             .map(|s| self.soil_to_fertilizer.convert(s))
             .map(|f| self.fertilizer_to_water.convert(f))
@@ -279,7 +305,7 @@ impl Almanac {
             .map(|l| self.light_to_temperature.convert(l))
             .map(|t| self.temperature_to_humidity.convert(t))
             .map(|h| self.humidity_to_location.convert(h))
-            .reduce(|smallest, l| smallest.min(l))
+            .min()
             .unwrap()
     }
 }
@@ -289,25 +315,24 @@ impl FromStr for Almanac {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut stanzas = s.split("\n\n");
-        println!("stanzas: {:?}", stanzas);
         let mut seeds_str = stanzas.next().unwrap().split_ascii_whitespace();
         if seeds_str.next() != Some("seeds:") {
             return Err("Expected first stanza to begin with `seeds: `".to_string());
         }
         let seeds: Vec<Seed> = seeds_str
             .map(|s| {
-                println!("{s}");
                 let n = usize::from_str_radix(s, 10).map_err(|e| format!("{e}"))?;
                 Ok(Seed(n))
             })
             .collect::<Result<Vec<_>, String>>()?;
 
-        let mut seed_ranges = Vec::with_capacity(seeds.len() / 2);
-        for i in 0..(seed_ranges.len() - 1) / 2 {
-            let start = seeds[i * 2];
-            let length = seeds[i * 2 + 1].into();
-            seed_ranges.push(SeedRange { start, length });
-        }
+        let seed_ranges = seeds
+            .chunks_exact(2)
+            .map(|s| SeedRange {
+                start: s[0],
+                length: (s[1]).into(),
+            })
+            .collect();
 
         let seed_to_soil = parse_map_stanza("seed-to-soil map:", &mut stanzas)?;
         let soil_to_fertilizer = parse_map_stanza("soil-to-fertilizer map:", &mut stanzas)?;
