@@ -16,7 +16,7 @@ fn run_part_1(input: &str, limit: GameLimits) -> u32 {
     games
         .iter()
         .filter_map(|g| {
-            if g.is_illegal(&limit) {
+            if !g.is_illegal(&limit) {
                 Some(g.id)
             } else {
                 None
