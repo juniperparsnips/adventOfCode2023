@@ -80,10 +80,8 @@ impl FromStr for Race {
             return Err("Expected second line to begin with 'Distance:'".to_string());
         }
 
-        let mut time: String = times.collect();
-        // time.remove_matches(' ');
-        let mut record: String = records.collect();
-        // record.remove_matches(' ');
+        let time: String = times.collect();
+        let record: String = records.collect();
 
         Ok(Race {
             time: time.parse().map_err(|e| format!("{e}"))?,
