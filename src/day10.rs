@@ -1,22 +1,27 @@
 use core::str::FromStr;
+use std::fmt::Display;
 
 fn main() {
     let input = include_str!("../assets/day10Input.txt");
     let part_1 = run_part_1(input);
     println!("part 1: {part_1}");
 
-    // let part_2 = run_part_2(input);
-    // println!("part 2: {part_2}");
+    let part_2 = run_part_2(input);
+    println!("part 2: {part_2}");
 }
 
 fn run_part_1(input: &str) -> usize {
-    let map: Map = input.parse().unwrap();
+    let mut map: Map = input.parse().unwrap();
 
-    map.farthest()
+    map.traverse_loop() / 2
 }
 
 fn run_part_2(input: &str) -> usize {
-    todo!()
+    let mut map: Map = input.parse().unwrap();
+
+    map.partition();
+    map.make_all_unclassified_inside();
+    map.count_inside()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -107,6 +112,16 @@ impl Tile {
             Tile::Start => true,
         }
     }
+
+    // &self should be the left when towards is North/South or the upper when towards is East/West
+    fn can_sneak(&self, other: &Self, towards: Direction) -> bool {
+        let (this_dir, other_dir) = match towards {
+            Direction::East | Direction::West => (Direction::South, Direction::North),
+            Direction::North | Direction::South => (Direction::East, Direction::West),
+        };
+
+        !(self.connects(this_dir) && other.connects(other_dir))
+    }
 }
 
 impl TryFrom<Vec<Direction>> for Tile {
@@ -165,8 +180,145 @@ impl FromStr for Tile {
     }
 }
 
+impl Display for Tile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Tile::Vertical => "|",
+            Tile::Horizontal => "-",
+            Tile::NorthToEast => "L",
+            Tile::NorthToWest => "J",
+            Tile::SouthToWest => "7",
+            Tile::SouthToEast => "F",
+            Tile::Ground => ".",
+            Tile::Start => "S",
+        };
+        f.write_str(s)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Classification {
+    Loop,
+    Inside,
+    Outside,
+}
+
+// each 'up', 'down' etc. represent whether this tween connects to the adjacent tween in that direction
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Tween {
+    up: bool,
+    down: bool,
+    left: bool,
+    right: bool,
+}
+
+struct TweenMap(Vec<Vec<(Tween, bool)>>);
+
+impl TweenMap {
+    fn visited(&self, row: usize, col: usize) -> bool {
+        self.0[row][col].1
+    }
+}
+
+impl Grid for TweenMap {
+    type Cell = (Tween, bool);
+    fn width(&self) -> usize {
+        self.0[0].len()
+    }
+
+    fn height(&self) -> usize {
+        self.0.len()
+    }
+
+    fn adjacent_cells(&self, row: usize, col: usize) -> Vec<(usize, usize)> {
+        let mut out = Vec::new();
+        if row != 0 && self.0[row][col].0.up {
+            out.push((row - 1, col));
+        }
+        if row < self.height() && self.0[row][col].0.down {
+            out.push((row + 1, col));
+        }
+        if col != 0 && self.0[row][col].0.left {
+            out.push((row, col - 1));
+        }
+        if col < self.width() && self.0[row][col].0.right {
+            out.push((row, col + 1));
+        }
+
+        out
+    }
+}
+
+impl Display for TweenMap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = String::new();
+
+        for row in &self.0 {
+            for (_, visited) in row {
+                match visited {
+                    true => s += "+",
+                    false => s += ".",
+                }
+            }
+            s += "\n"
+        }
+        f.write_str(&s)
+    }
+}
+
+trait Grid {
+    type Cell;
+
+    fn width(&self) -> usize;
+    fn height(&self) -> usize;
+
+    fn all_edge_cells(&self) -> Vec<(usize, usize)> {
+        // (0, 0) .... (0, len-1)
+        // (1, 0) .... (len-1, 0)
+        // (1, len-1) .. (len-1, len-1)
+        // (2, len-1) .. (len-2, len-1)
+        (0..self.width())
+            .map(|c| (0, c))
+            .chain((1..self.height()).map(|r| (r, 0)))
+            .chain((1..self.height()).map(|r| (r, self.width() - 1)))
+            .chain((2..self.width() - 1).map(|c| (self.height() - 1, c)))
+            .collect()
+    }
+
+    fn adjacent_cells(&self, row: usize, col: usize) -> Vec<(usize, usize)> {
+        let mut out = Vec::new();
+
+        if row != 0 {
+            out.push((row - 1, col));
+        }
+        if row < self.height() {
+            out.push((row + 1, col));
+        }
+        if col != 0 {
+            out.push((row, col - 1))
+        }
+        if col < self.width() {
+            out.push((row, col + 1))
+        }
+        if row != 0 && col != 0 {
+            out.push((row - 1, col - 1))
+        }
+        if row != 0 && col < self.width() {
+            out.push((row - 1, col + 1))
+        }
+        if row < self.height() && col != 0 {
+            out.push((row + 1, col - 1))
+        }
+        if row < self.height() && col < self.width() {
+            out.push((row + 1, col + 1))
+        }
+
+        out
+    }
+}
+
 #[derive(Debug, Clone)]
-struct Map(Vec<Vec<Tile>>);
+struct Map(Vec<Vec<(Tile, Option<Classification>)>>);
 
 impl Map {
     fn find_start(&self) -> Option<(usize, usize)> {
@@ -177,7 +329,7 @@ impl Map {
                 let c = r
                     .iter()
                     .enumerate()
-                    .find(|(_, t)| **t == Tile::Start)
+                    .find(|(_, (t, _))| *t == Tile::Start)
                     .unzip()
                     .0;
                 Some(i).zip(c)
@@ -200,37 +352,215 @@ impl Map {
         let right = self.0.get(row).map(|r| r.get(col + 1)).flatten();
 
         let mut dirs = Vec::with_capacity(2);
-        if up.is_some_and(|u| u.connects(Direction::South)) {
+        if up.is_some_and(|(t, _)| t.connects(Direction::South)) {
             dirs.push(Direction::North)
         }
-        if down.is_some_and(|d| d.connects(Direction::North)) {
+        if down.is_some_and(|(t, _)| t.connects(Direction::North)) {
             dirs.push(Direction::South)
         }
-        if left.is_some_and(|l| l.connects(Direction::East)) {
+        if left.is_some_and(|(t, _)| t.connects(Direction::East)) {
             dirs.push(Direction::West)
         }
-        if right.is_some_and(|r| r.connects(Direction::West)) {
+        if right.is_some_and(|(t, _)| t.connects(Direction::West)) {
             dirs.push(Direction::East)
         }
 
         dirs.try_into().unwrap()
     }
 
-    fn farthest(&self) -> usize {
+    /// Go across the loop setting the tiles on the loop that they're on the loop
+    /// Returns the length of the loop
+    fn traverse_loop(&mut self) -> usize {
         let (start_row, start_col) = self.find_start().unwrap();
         let mut current = self.translate_start(start_row, start_col);
+        self.set_tile_class(start_row, start_col, Classification::Loop);
         let mut direction: Direction = current.try_into().unwrap();
 
         let (mut row, mut col) = (start_row, start_col);
         let mut steps = 0;
+
         loop {
             (row, col, direction) = current.next(direction, row, col);
-            current = self.0[row][col];
+            self.set_tile_class(row, col, Classification::Loop);
+
+            current = self.0[row][col].0;
             steps += 1;
             if row == start_row && col == start_col {
-                return steps / 2;
+                return steps;
             }
         }
+    }
+
+    /// row and column are tween addresses
+    fn tween_at(&self, row: usize, col: usize) -> Tween {
+        let up = if row > 0 && col > 0 && col < self.width() {
+            let (left, left_class) = self.0[row - 1][col - 1];
+            let (right, right_class) = self.0[row - 1][col];
+
+            if left_class.is_some_and(|c| c == Classification::Loop)
+                && right_class.is_some_and(|c| c == Classification::Loop)
+            {
+                left.can_sneak(&right, Direction::North)
+            } else {
+                true
+            }
+        } else {
+            false
+        };
+        let down = if row < self.height() && col > 0 && col < self.width() {
+            let (left, left_class) = self.0[row][col - 1];
+            let (right, right_class) = self.0[row][col];
+
+            if left_class.is_some_and(|c| c == Classification::Loop)
+                && right_class.is_some_and(|c| c == Classification::Loop)
+            {
+                left.can_sneak(&right, Direction::South)
+            } else {
+                true
+            }
+        } else {
+            false
+        };
+        let left = if col > 0 && row > 0 && row < self.height() {
+            let (up, up_class) = self.0[row - 1][col - 1];
+            let (down, down_class) = self.0[row][col - 1];
+
+            if up_class.is_some_and(|c| c == Classification::Loop)
+                && down_class.is_some_and(|c| c == Classification::Loop)
+            {
+                up.can_sneak(&down, Direction::West)
+            } else {
+                true
+            }
+        } else {
+            false
+        };
+        let right = if col < self.width() && row > 0 && row < self.height() {
+            let (up, up_class) = self.0[row - 1][col];
+            let (down, down_class) = self.0[row][col];
+
+            if up_class.is_some_and(|c| c == Classification::Loop)
+                && down_class.is_some_and(|c| c == Classification::Loop)
+            {
+                up.can_sneak(&down, Direction::East)
+            } else {
+                true
+            }
+        } else {
+            false
+        };
+        Tween {
+            up,
+            down,
+            left,
+            right,
+        }
+    }
+
+    fn make_tweens(&self) -> TweenMap {
+        let mut map = vec![Vec::with_capacity(self.0[0].len() + 1); self.0.len() + 1];
+        // Tweens go around the outside edge of the grid, so len + 1
+        for row in 0..self.0.len() + 1 {
+            for col in 0..self.0[0].len() + 1 {
+                map[row].push((self.tween_at(row, col), false))
+            }
+        }
+        TweenMap(map)
+    }
+
+    fn display_interspersed(&self, tweens: &TweenMap) {
+        let mut s = String::new();
+        for i in 0..tweens.0.len() {
+            // display tweens
+            for (_, visited) in &tweens.0[i] {
+                match visited {
+                    true => s += "+ ",
+                    false => s += ". ",
+                }
+            }
+            s += "\n ";
+            if i >= self.0.len() {
+                s += "\n";
+                continue;
+            }
+            for (tile, class) in &self.0[i] {
+                match class {
+                    Some(Classification::Outside) => s += "O ",
+                    Some(Classification::Inside) => s += "I ",
+                    _ => s += &format!("{tile} "),
+                }
+            }
+            s += "\n";
+        }
+        println!("{s}")
+    }
+
+    pub fn partition(&mut self) {
+        let loop_size = self.traverse_loop();
+        println!("Loop size: {loop_size}");
+        println!("farthest point: {}", loop_size / 2);
+
+        let mut tweens = self.make_tweens();
+
+        let mut stack = tweens.all_edge_cells();
+
+        while let Some((row, col)) = stack.pop() {
+            if tweens.0[row][col].1 {
+                continue;
+            }
+            tweens.0[row][col].1 = true;
+
+            stack.append(&mut tweens.adjacent_cells(row, col));
+        }
+
+        // any cell surrounded by 4 visited tweens is Outside
+        for row in 0..self.0.len() {
+            for col in 0..self.0[row].len() {
+                if tweens.visited(row, col)
+                    && tweens.visited(row, col + 1)
+                    && tweens.visited(row + 1, col)
+                    && tweens.visited(row + 1, col + 1)
+                {
+                    self.0[row][col].1 = Some(Classification::Outside)
+                }
+            }
+        }
+
+        self.display_interspersed(&tweens);
+    }
+
+    pub fn make_all_unclassified_inside(&mut self) {
+        self.0
+            .iter_mut()
+            .map(|r| r.iter_mut())
+            .flatten()
+            .map(|(_t, c)| c.get_or_insert(Classification::Inside))
+            .count();
+    }
+
+    pub fn count_inside(&self) -> usize {
+        self.0
+            .iter()
+            .map(|r| r.iter())
+            .flatten()
+            .filter(|(_t, c)| c.is_some_and(|c| c == Classification::Inside))
+            .count()
+    }
+
+    #[inline(always)]
+    fn set_tile_class(&mut self, row: usize, col: usize, class: Classification) {
+        self.0[row][col].1.get_or_insert(class);
+    }
+}
+
+impl Grid for Map {
+    type Cell = (Tile, Option<Classification>);
+    fn height(&self) -> usize {
+        self.0.len()
+    }
+
+    fn width(&self) -> usize {
+        self.0[0].len()
     }
 }
 
@@ -241,12 +571,33 @@ impl FromStr for Map {
             .lines()
             .map(|l| {
                 l.chars()
-                    .map(|c| c.to_string().parse())
+                    .map(|c| {
+                        let t = c.to_string().parse()?;
+                        Ok((t, None))
+                    })
                     .collect::<Result<Vec<_>, String>>()
             })
             .collect::<Result<Vec<_>, String>>()?;
 
         Ok(Map(map))
+    }
+}
+
+impl Display for Map {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = String::new();
+
+        for row in &self.0 {
+            for (tile, class) in row {
+                match *class {
+                    Some(Classification::Outside) => s += "O",
+                    Some(Classification::Inside) => s += "I",
+                    _ => s += &format!("{tile}"),
+                }
+            }
+            s += "\n"
+        }
+        f.write_str(&s)
     }
 }
 
@@ -278,11 +629,69 @@ LJ...
         assert_eq!(run_part_1(input), 8);
     }
 
-    // #[test]
+    #[test]
     fn part_2_known_input() {
-        let input = r##"
+        let input = r##"...........
+.S-------7.
+.|F-----7|.
+.||.....||.
+.||.....||.
+.|L-7.F-J|.
+.|..|.|..|.
+.L--J.L--J.
+...........
 "##;
 
-        assert_eq!(run_part_2(input), 0);
+        assert_eq!(run_part_2(input), 4);
+    }
+
+    #[test]
+    fn part_2_known_input_2() {
+        let input = r##"..........
+.S------7.
+.|F----7|.
+.||....||.
+.||....||.
+.|L-7F-J|.
+.|..||..|.
+.L--JL--J.
+..........
+"##;
+
+        assert_eq!(run_part_2(input), 4);
+    }
+
+    #[test]
+    fn part_2_known_input_3() {
+        let input = r##".F----7F7F7F7F-7....
+.|F--7||||||||FJ....
+.||.FJ||||||||L7....
+FJL7L7LJLJ||LJ.L-7..
+L--J.L7...LJS7F-7L7.
+....F-J..F7FJ|L7L7L7
+....L7.F7||L7|.L7L7|
+.....|FJLJ|FJ|F7|.LJ
+....FJL-7.||.||||...
+....L---J.LJ.LJLJ...
+"##;
+
+        assert_eq!(run_part_2(input), 8);
+    }
+
+    #[test]
+    fn part_2_known_input_4() {
+        let input = r##"FF7FSF7F7F7F7F7F---7
+L|LJ||||||||||||F--J
+FL-7LJLJ||||||LJL-77
+F--JF--7||LJLJ7F7FJ-
+L---JF-JLJ.||-FJLJJ7
+|F|F-JF---7F7-L7L|7|
+|FFJF7L7F-JF7|JL---7
+7-L-JL7||F7|L7F-7F7|
+L.L7LFJ|||||FJL7||LJ
+L7JLJL-JLJLJL--JLJ.L
+"##;
+
+        assert_eq!(run_part_2(input), 10);
     }
 }
