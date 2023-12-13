@@ -8,13 +8,15 @@ fn main() {
     let input = include_str!("../assets/day11Input.txt");
     let res_1 = run_part_1(input);
     println!("part 1: {res_1}");
-    // let res_2 = run_part_2(input);
-    // println!("part 2: {res_2}");
+    let res_2 = run_part_2(input);
+    println!("part 2: {res_2}");
+    // 293152727264 -> incorrect (forgot to change column expansion too)
+    // 611998089572 -> correct
 }
 
 fn run_part_1(input: &str) -> usize {
     let mut star_chart: StarChart = input.parse().unwrap();
-    star_chart.expand();
+    star_chart.expand(2);
 
     star_chart
         .pairs()
@@ -23,7 +25,13 @@ fn run_part_1(input: &str) -> usize {
 }
 
 fn run_part_2(input: &str) -> usize {
-    todo!()
+    let mut star_chart: StarChart = input.parse().unwrap();
+    star_chart.expand(1000000);
+
+    star_chart
+        .pairs()
+        .map(|(l, r)| l.taxi_cab_distance(r))
+        .sum()
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -46,7 +54,7 @@ struct StarChart {
 }
 
 impl StarChart {
-    fn expand(&mut self) {
+    fn expand(&mut self, times: usize) {
         let height_set: HashSet<usize> = (0..self.height).collect();
         let occupied_rows: HashSet<usize> = self.galaxies.iter().map(|g| g.row).collect();
         let mut expand_rows: Vec<_> = height_set.difference(&occupied_rows).collect();
@@ -59,17 +67,15 @@ impl StarChart {
 
         let mut rows_expanded_at = vec![0; self.height];
         for row in &expand_rows {
-            let new = vec![rows_expanded_at[**row] + 1; self.height - *row];
+            let new = vec![rows_expanded_at[**row] + times - 1; self.height - *row];
             let _: Vec<_> = rows_expanded_at.splice(*row..&self.height, new).collect();
         }
 
-        println!("{expand_cols:?}");
         let mut cols_expanded_at = vec![0; self.width];
         for col in &expand_cols {
-            let new = vec![cols_expanded_at[**col] + 1; self.width - *col];
+            let new = vec![cols_expanded_at[**col] + times - 1; self.width - *col];
             let _: Vec<_> = cols_expanded_at.splice(*col..&self.width, new).collect();
         }
-        println!("{cols_expanded_at:?}");
 
         self.height += expand_rows.len();
         self.width += expand_cols.len();
